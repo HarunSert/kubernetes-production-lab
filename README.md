@@ -263,6 +263,117 @@ This lab covers several production-oriented Kubernetes concepts:
 - Secret management
 - Rollback strategy
 
+## Helm Deployment
+
+The application can also be deployed and managed using Helm.
+
+The Helm chart is located at:
+
+```text
+helm/nginx-demo/
+```
+
+### Helm Chart Structure
+
+```text
+helm/nginx-demo/
+├── Chart.yaml
+├── values.yaml
+└── templates/
+    ├── configmap.yaml
+    ├── deployment.yaml
+    ├── service.yaml
+    ├── ingress.yaml
+    └── hpa.yaml
+```
+
+### Validate the Chart
+
+```bash
+helm lint helm/nginx-demo
+```
+
+Render Kubernetes manifests without deploying:
+
+```bash
+helm template nginx-demo helm/nginx-demo \
+  -n devops-lab
+```
+
+### Install
+
+The Kubernetes Secret is created separately and is not stored in Git.
+
+```bash
+kubectl create secret generic nginx-demo-secret \
+  -n devops-lab \
+  --from-literal=DEMO_TOKEN='<YOUR_SECRET>'
+```
+
+Install the Helm release:
+
+```bash
+helm install nginx-demo helm/nginx-demo \
+  -n devops-lab
+```
+
+Verify:
+
+```bash
+helm list -n devops-lab
+```
+
+### Helm Upgrade
+
+Configuration values can be overridden during an upgrade.
+
+Example:
+
+```bash
+helm upgrade nginx-demo helm/nginx-demo \
+  -n devops-lab \
+  --set config.APP_ENV=helm-lab
+```
+
+The Deployment contains a ConfigMap checksum annotation so that configuration changes automatically trigger a rolling update of the Pods.
+
+Verify the updated environment:
+
+```bash
+kubectl exec -n devops-lab deploy/nginx-demo -- \
+  sh -c 'env | grep APP_ENV'
+```
+
+### Helm Release History
+
+```bash
+helm history nginx-demo -n devops-lab
+```
+
+Example release lifecycle tested in this lab:
+
+```text
+Revision 1 → Initial installation
+Revision 2 → Helm upgrade
+Revision 3 → Rollback to revision 1
+```
+
+### Helm Rollback
+
+Rollback to a previous revision:
+
+```bash
+helm rollback nginx-demo 1 -n devops-lab
+```
+
+Verify:
+
+```bash
+kubectl rollout status deployment/nginx-demo -n devops-lab
+```
+
+This project has been tested with real Helm install, upgrade and rollback operations on a running K3s cluster.
+
 ## Future Improvements
 
 Planned improvements:

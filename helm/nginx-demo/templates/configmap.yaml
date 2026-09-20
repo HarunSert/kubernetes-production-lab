@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-demo-config
+data:
+  APP_NAME: {{ .Values.config.APP_NAME | quote }}
+  APP_ENV: {{ .Values.config.APP_ENV | quote }}

@@ -1,0 +1,43 @@
+replicaCount: 2
+
+image:
+  repository: harunsert/nginx-jenkins-demo
+  tag: latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: traefik
+  host: devops-lab.local
+
+config:
+  APP_NAME: jenkins-nginx-demo
+  APP_ENV: lab
+
+existingSecret: nginx-demo-secret
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 32Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 10
+
+probes:
+  readiness:
+    initialDelaySeconds: 3
+    periodSeconds: 5
+  liveness:
+    initialDelaySeconds: 10
+    periodSeconds: 10
