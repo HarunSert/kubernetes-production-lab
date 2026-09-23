@@ -1,145 +1,236 @@
 # Kubernetes Production Lab
 
-A hands-on Kubernetes lab demonstrating production-oriented deployment, networking, health checks, resource management, autoscaling and rollout strategies.
+A hands-on Kubernetes lab demonstrating production-style application deployment, Helm packaging, health checks, autoscaling, ingress routing, rolling updates and CI/CD integration.
 
-The project is deployed and tested on a real K3s cluster running on a cloud server.
+The lab runs on a real single-node K3s cluster hosted on a cloud server.
+
+The main application deployed in this environment is:
+
+[HarunSert/devops-lab-api](https://github.com/HarunSert/devops-lab-api)
 
 ## Architecture
 
-```text
-                         Client
-                           |
-                           v
-                    Traefik Ingress
-                           |
-                           v
-                   nginx-demo-service
-                           |
-                    +------+------+
-                    |             |
-                    v             v
-                  Pod 1         Pod 2
-                    |
-                    |
-              Horizontal Pod
-                Autoscaler
-                    |
-              Scale: 2 → 5
+```mermaid
+flowchart TD
+    A[GitHub] -->|Webhook| B[Jenkins]
+    B --> C[Automated Tests]
+    C --> D[Docker Build]
+    D --> E[Docker Hub]
+    E --> F[Helm]
+    F --> G[K3s Cluster]
+
+    G --> H[Traefik Ingress]
+    H --> I[ClusterIP Service]
+    I --> J[Deployment]
+
+    J --> K[Pod 1]
+    J --> L[Pod 2]
+
+    M[Horizontal Pod Autoscaler] --> J
+    N[ConfigMap] --> J
 ```
 
 ## Technologies
 
 - Kubernetes / K3s
 - Docker
-- Traefik
+- Helm
+- Jenkins
+- GitHub Webhooks
+- Docker Hub
+- Traefik Ingress
 - Metrics Server
-- Nginx
+- Horizontal Pod Autoscaler
 - ConfigMap
 - Kubernetes Secrets
-- Horizontal Pod Autoscaler
+- Resource Requests and Limits
+- Liveness and Readiness Probes
+- Rolling Update Strategy
 - Git
 
-## Project Structure
+## Main Application
+
+The primary application deployed in this lab is:
 
 ```text
-.
-├── kubernetes
-│   ├── namespace.yaml
-│   ├── configmap.yaml
-│   ├── deployment.yaml
-│   ├── service.yaml
-│   ├── ingress.yaml
-│   └── hpa.yaml
-│
-├── scripts
-│   ├── load-test.sh
-│   └── stop-load-test.sh
-│
-├── .gitignore
-└── README.md
+devops-lab-api
 ```
 
-## Features
+Application repository:
 
-This project demonstrates:
+[HarunSert/devops-lab-api](https://github.com/HarunSert/devops-lab-api)
 
-- Kubernetes Namespace isolation
-- Multi-replica Deployment
-- ClusterIP Service
-- ConfigMap-based configuration
-- Kubernetes Secret injection
-- CPU and memory requests / limits
-- Readiness probes
-- Liveness probes
-- Rolling Update strategy
-- Rollback operations
-- Traefik Ingress routing
-- Horizontal Pod Autoscaling
-- CPU-based scaling
-- Application load testing
+Current tested release:
 
-## Deployment
+```text
+Application Version : 1.0.2
+Docker Image        : harunsert/devops-lab-api:1.0.2
+Helm Revision       : 2
+Namespace           : devops-lab
+Replica Count       : 2
+HPA Range           : 2-5
+CPU Target          : 50%
+```
 
-Create the namespace:
+## CI/CD Integration
+
+The Kubernetes deployment is integrated with the Jenkins pipeline in the `devops-lab-api` repository.
+
+```text
+Git Tag
+   |
+   v
+GitHub Webhook
+   |
+   v
+Jenkins
+   |
+   +--> Automated Tests
+   |
+   +--> Docker Build
+   |
+   +--> Docker Hub Push
+   |
+   +--> Clone Deployment Repository
+   |
+   +--> Helm Upgrade
+   |
+   +--> Kubernetes Rolling Deployment
+   |
+   v
+Deployment Verification
+```
+
+Example release:
 
 ```bash
-kubectl apply -f kubernetes/namespace.yaml
+git tag 1.0.2
+git push origin 1.0.2
 ```
 
-Apply the ConfigMap:
+The same release version is used across the deployment:
+
+```text
+Git Tag      : 1.0.2
+Docker Image : harunsert/devops-lab-api:1.0.2
+APP_VERSION  : 1.0.2
+```
+
+## Helm Deployment
+
+The Helm chart for the API is located at:
+
+```text
+helm/devops-lab-api/
+```
+
+Example deployment:
 
 ```bash
-kubectl apply -f kubernetes/configmap.yaml
+helm upgrade \
+  --install devops-lab-api \
+  helm/devops-lab-api \
+  --namespace devops-lab \
+  --set image.repository=harunsert/devops-lab-api \
+  --set-string image.tag=1.0.2 \
+  --set-string config.APP_VERSION=1.0.2 \
+  --atomic \
+  --timeout 3m
 ```
 
-Create the Secret:
+The `--atomic` option ensures that a failed Helm operation does not leave the release in a partially deployed state.
+
+## Kubernetes Resources
+
+The API deployment uses the following Kubernetes resources:
+
+```text
+Traefik Ingress
+       |
+       v
+ClusterIP Service
+       |
+       v
+Deployment
+       |
+       +--> Pod 1
+       |
+       +--> Pod 2
+```
+
+Additional components:
+
+```text
+ConfigMap
+HorizontalPodAutoscaler
+Resource Requests / Limits
+Readiness Probe
+Liveness Probe
+Rolling Update Strategy
+```
+
+## Application Health Checks
+
+The application exposes dedicated health endpoints.
+
+Readiness:
+
+```text
+/health/ready
+```
+
+Liveness:
+
+```text
+/health/live
+```
+
+Example readiness test:
 
 ```bash
-kubectl create secret generic nginx-demo-secret \
-  -n devops-lab \
-  --from-literal=DEMO_TOKEN='<YOUR_SECRET>'
+curl \
+  -H "Host: api.devops-lab.local" \
+  http://127.0.0.1/health/ready
 ```
 
-Deploy the application:
+Expected response:
 
-```bash
-kubectl apply -f kubernetes/deployment.yaml
-kubectl apply -f kubernetes/service.yaml
-kubectl apply -f kubernetes/ingress.yaml
-kubectl apply -f kubernetes/hpa.yaml
+```json
+{
+  "status": "ready"
+}
 ```
 
-## Verify Deployment
-
-```bash
-kubectl get all -n devops-lab
-```
-
-Check pods:
-
-```bash
-kubectl get pods -n devops-lab -o wide
-```
-
-Check application health:
-
-```bash
-kubectl exec -n devops-lab deploy/nginx-demo -- \
-  sh -c 'env | grep -E "APP_NAME|APP_ENV"'
-```
+Kubernetes uses these endpoints to determine whether the container is alive and whether it is ready to receive traffic.
 
 ## Ingress
 
-The application is exposed through Traefik Ingress.
+Traefik is used as the Kubernetes Ingress Controller.
+
+Application host:
 
 ```text
-devops-lab.local
+api.devops-lab.local
 ```
 
 Test:
 
 ```bash
-curl -H "Host: devops-lab.local" http://127.0.0.1
+curl \
+  -H "Host: api.devops-lab.local" \
+  http://127.0.0.1/
+```
+
+Example response:
+
+```json
+{
+  "application": "devops-lab-api",
+  "environment": "lab",
+  "version": "1.0.2",
+  "status": "running",
+  "message": "DevOps CI/CD pipeline is running"
+}
 ```
 
 Traffic flow:
@@ -160,236 +251,206 @@ Service
 Pods
 ```
 
+## Rolling Deployment
+
+The API deployment uses a Kubernetes RollingUpdate strategy.
+
+A real upgrade from version `1.0.1` to `1.0.2` was tested.
+
+During the upgrade Kubernetes created a new ReplicaSet and replaced the previous Pods after the new Pods became ready.
+
+Example result:
+
+```text
+Old ReplicaSet:
+devops-lab-api-64d495d548   0 replicas
+
+New ReplicaSet:
+devops-lab-api-7b46f6b98    2 replicas
+```
+
+Deployment status can be monitored with:
+
+```bash
+kubectl rollout status \
+  deployment/devops-lab-api \
+  -n devops-lab
+```
+
+The deployed image can be verified with:
+
+```bash
+kubectl get deployment devops-lab-api \
+  -n devops-lab \
+  -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+```
+
+Example result:
+
+```text
+harunsert/devops-lab-api:1.0.2
+```
+
 ## Horizontal Pod Autoscaler
 
-The application starts with a minimum of 2 replicas and can scale up to 5 replicas.
+The API deployment has HPA configured with:
+
+```text
+Minimum replicas : 2
+Maximum replicas : 5
+CPU target       : 50%
+```
+
+Check HPA:
 
 ```bash
 kubectl get hpa -n devops-lab
 ```
 
-Start load generation:
-
-```bash
-./scripts/load-test.sh
-```
-
-Monitor autoscaling:
-
-```bash
-kubectl get hpa -n devops-lab -w
-```
-
-Monitor pods:
-
-```bash
-kubectl get pods -n devops-lab -w
-```
-
-During testing, the deployment successfully scaled from:
+The API also provides a CPU load endpoint:
 
 ```text
-2 Pods → 5 Pods
+/load?seconds=N
+```
+
+which can be used for autoscaling tests.
+
+## Helm Release History
+
+Check the release history:
+
+```bash
+helm history devops-lab-api -n devops-lab
+```
+
+The tested release lifecycle currently includes:
+
+```text
+Revision 1 -> Initial Helm installation with version 1.0.1
+Revision 2 -> Automated Helm upgrade to version 1.0.2
+```
+
+## Earlier Nginx Kubernetes Lab
+
+Before integrating the FastAPI application, an Nginx-based Kubernetes lab was used to test core Kubernetes concepts.
+
+The Nginx lab includes:
+
+- Namespace isolation
+- Multi-replica Deployment
+- ClusterIP Service
+- ConfigMap
+- Kubernetes Secret
+- Resource requests and limits
+- Liveness and readiness probes
+- Traefik Ingress
+- Horizontal Pod Autoscaler
+- Rolling updates
+- Kubernetes rollback
+- Helm install
+- Helm upgrade
+- Helm rollback
+
+During HPA testing, the Nginx deployment successfully scaled from:
+
+```text
+2 Pods -> 5 Pods
 ```
 
 based on CPU utilization.
 
-Stop the load test:
+The Nginx Helm release lifecycle was also tested:
 
-```bash
-./scripts/stop-load-test.sh
+```text
+Revision 1 -> Initial installation
+Revision 2 -> Helm upgrade
+Revision 3 -> Helm rollback
 ```
 
-## Rolling Update
+## Repository Structure
 
-Update the container image:
-
-```bash
-kubectl set image deployment/nginx-demo \
-  nginx-demo=nginx:1.27-alpine \
-  -n devops-lab
+```text
+.
+├── helm/
+│   ├── devops-lab-api/
+│   │   ├── Chart.yaml
+│   │   ├── values.yaml
+│   │   └── templates/
+│   │       ├── configmap.yaml
+│   │       ├── deployment.yaml
+│   │       ├── hpa.yaml
+│   │       ├── ingress.yaml
+│   │       └── service.yaml
+│   │
+│   └── nginx-demo/
+│       ├── Chart.yaml
+│       ├── values.yaml
+│       └── templates/
+│
+├── kubernetes/
+│   ├── namespace.yaml
+│   ├── configmap.yaml
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   ├── ingress.yaml
+│   └── hpa.yaml
+│
+├── scripts/
+│   ├── load-test.sh
+│   └── stop-load-test.sh
+│
+├── .gitignore
+└── README.md
 ```
 
-Monitor:
+## Concepts Demonstrated
 
-```bash
-kubectl rollout status deployment/nginx-demo -n devops-lab
-```
+This lab demonstrates practical implementation of:
 
-The deployment uses:
-
-```yaml
-strategy:
-  type: RollingUpdate
-  rollingUpdate:
-    maxUnavailable: 0
-    maxSurge: 1
-```
-
-This allows new Pods to become ready before old Pods are terminated.
-
-## Rollback
-
-Check rollout history:
-
-```bash
-kubectl rollout history deployment/nginx-demo -n devops-lab
-```
-
-Rollback:
-
-```bash
-kubectl rollout undo deployment/nginx-demo -n devops-lab
-```
-
-Verify:
-
-```bash
-kubectl rollout status deployment/nginx-demo -n devops-lab
-```
-
-## Production Concepts Demonstrated
-
-This lab covers several production-oriented Kubernetes concepts:
-
-- High availability at application replica level
-- Zero-downtime rolling deployments
-- Application health monitoring
+- Kubernetes application deployment
+- Helm package management
+- CI/CD based application delivery
+- Semantic release versioning
+- Rolling application upgrades
+- Application health checks
 - Resource management
-- Automatic scaling
+- Horizontal autoscaling
 - Service discovery
 - Ingress routing
-- Configuration separation
-- Secret management
-- Rollback strategy
+- Configuration management
+- Secret handling
+- Deployment verification
 
-## Helm Deployment
+## Lab Scope
 
-The application can also be deployed and managed using Helm.
+This repository is a personal hands-on DevOps lab.
 
-The Helm chart is located at:
+It demonstrates production-style Kubernetes concepts in a controlled environment and is not intended to represent a complete enterprise production platform.
 
-```text
-helm/nginx-demo/
-```
-
-### Helm Chart Structure
-
-```text
-helm/nginx-demo/
-├── Chart.yaml
-├── values.yaml
-└── templates/
-    ├── configmap.yaml
-    ├── deployment.yaml
-    ├── service.yaml
-    ├── ingress.yaml
-    └── hpa.yaml
-```
-
-### Validate the Chart
-
-```bash
-helm lint helm/nginx-demo
-```
-
-Render Kubernetes manifests without deploying:
-
-```bash
-helm template nginx-demo helm/nginx-demo \
-  -n devops-lab
-```
-
-### Install
-
-The Kubernetes Secret is created separately and is not stored in Git.
-
-```bash
-kubectl create secret generic nginx-demo-secret \
-  -n devops-lab \
-  --from-literal=DEMO_TOKEN='<YOUR_SECRET>'
-```
-
-Install the Helm release:
-
-```bash
-helm install nginx-demo helm/nginx-demo \
-  -n devops-lab
-```
-
-Verify:
-
-```bash
-helm list -n devops-lab
-```
-
-### Helm Upgrade
-
-Configuration values can be overridden during an upgrade.
-
-Example:
-
-```bash
-helm upgrade nginx-demo helm/nginx-demo \
-  -n devops-lab \
-  --set config.APP_ENV=helm-lab
-```
-
-The Deployment contains a ConfigMap checksum annotation so that configuration changes automatically trigger a rolling update of the Pods.
-
-Verify the updated environment:
-
-```bash
-kubectl exec -n devops-lab deploy/nginx-demo -- \
-  sh -c 'env | grep APP_ENV'
-```
-
-### Helm Release History
-
-```bash
-helm history nginx-demo -n devops-lab
-```
-
-Example release lifecycle tested in this lab:
-
-```text
-Revision 1 → Initial installation
-Revision 2 → Helm upgrade
-Revision 3 → Rollback to revision 1
-```
-
-### Helm Rollback
-
-Rollback to a previous revision:
-
-```bash
-helm rollback nginx-demo 1 -n devops-lab
-```
-
-Verify:
-
-```bash
-kubectl rollout status deployment/nginx-demo -n devops-lab
-```
-
-This project has been tested with real Helm install, upgrade and rollback operations on a running K3s cluster.
+The current K3s environment is a single-node cluster. Multiple application replicas provide application-level redundancy but not Kubernetes node-level high availability.
 
 ## Future Improvements
 
-Planned improvements:
+Possible future improvements include:
 
-- Helm chart
 - Prometheus and Grafana
 - Argo CD / GitOps
-- Istio Service Mesh
-- Persistent Volumes
 - Network Policies
-- CI/CD integration
 - TLS Ingress
-- Multi-node Kubernetes testing
+- Persistent Volumes
+- Multi-node Kubernetes cluster
+- Separate Jenkins build agents
+
+## Related Repository
+
+Application source code and Jenkins CI/CD pipeline:
+
+[HarunSert/devops-lab-api](https://github.com/HarunSert/devops-lab-api)
 
 ## Author
 
 **Harun Sert**
 
-DevOps Engineer
+- GitHub: [HarunSert](https://github.com/HarunSert)
+- LinkedIn: [Harun Sert](https://www.linkedin.com/in/harun-sert-819236233/)
+
